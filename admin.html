@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Tekestat Admin</title>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
+</head>
+<body>
+    <h1>Eredmény módosítása</h1>
+    <p>Hazai csapat: <input type="number" id="hazai" value="0"></p>
+    <p>Vendég csapat: <input type="number" id="vendeg" value="0"></p>
+    <button onclick="mentes()">Frissítés az élő adásban</button>
+
+    <script>
+        // Ide másold be a Firebase-től kapott configot!
+        const firebaseConfig = {
+            apiKey: "...",
+            authDomain: "...",
+            databaseURL: "...",
+            projectId: "...",
+            storageBucket: "...",
+            messagingSenderId: "...",
+            appId: "..."
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        function mentes() {
+            const h = document.getElementById('hazai').value;
+            const v = document.getElementById('vendeg').value;
+            
+            // Beküldi az adatot a felhőbe
+            db.ref('meccs/allas').set({
+                hazai: h,
+                vendeg: v
+            });
+            alert("Sikeresen frissítve!");
+        }
+    </script>
+</body>
+</html>
