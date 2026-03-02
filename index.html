@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Élő Eredményjelző - OBS</title>
+    <style>
+        /* Itt kedvedre szépítheted az eredményjelzőt */
+        body { background-color: transparent; color: white; font-family: Arial; text-align: center; }
+        .score-box { display: flex; justify-content: center; font-size: 80px; font-weight: bold; }
+        .team { margin: 0 40px; }
+        .label { font-size: 20px; color: #aaa; }
+    </style>
+
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
+</head>
+<body>
+
+    <div class="score-box">
+        <div class="team">
+            <div class="label">HAZAI</div>
+            <div id="hazai-display">0</div>
+        </div>
+        <div class="team">
+            <div class="label">VENDÉG</div>
+            <div id="vendeg-display">0</div>
+        </div>
+    </div>
+
+    <script>
+        // IDE MÁSOLD BE UGYANAZT A CONFIGOT, AMIT AZ ADMINBA!
+        const firebaseConfig = {
+            apiKey: "...",
+            authDomain: "...",
+            databaseURL: "...",
+            projectId: "...",
+            storageBucket: "...",
+            messagingSenderId: "...",
+            appId: "..."
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        // FIGYELÉS: Amint változik az adat a Firebase-ben, ez lefut
+        db.ref('meccs/allas').on('value', (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                document.getElementById('hazai-display').innerText = data.hazai;
+                document.getElementById('vendeg-display').innerText = data.vendeg;
+            }
+        });
+    </script>
+</body>
+</html>
