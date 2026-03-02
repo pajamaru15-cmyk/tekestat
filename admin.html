@@ -2,73 +2,279 @@
 <html lang="hu">
 <head>
     <meta charset="UTF-8">
-    <title>Tekestat ADMIN - Élő Kezelő</title>
-    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
-
+    <title>Tekestat HUD v13.6 - Fixed Layout</title>
     <style>
-        /* Ide másold be a tkstat100.html teljes <style> részét, 
-           hogy ugyanúgy nézzen ki, mint az eredeti! */
-        :root { --cyan: #00d4ff; --orange: #ff8c00; --panel-bg: rgba(10, 12, 18, 0.95); }
-        body { background: #1a1a1a; font-family: 'Segoe UI', sans-serif; color: white; padding: 20px; }
-        /* ... (többi stílus) ... */
+        :root {
+            --cyan: #00d4ff; --orange: #ff8c00; --panel-bg: rgba(10, 12, 18, 0.95);
+        }
+        body {
+            background: transparent !important; margin: 0; padding: 0;
+            display: flex; justify-content: center; align-items: center;
+            min-height: 100vh; font-family: 'Segoe UI', sans-serif; color: white;
+        }
+
+        input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type=number] { -moz-appearance: textfield; appearance: none; }
+
+        .main-hud-panel {
+            background: var(--panel-bg); padding: 25px; 
+            display: flex; gap: 20px; border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 4px; box-shadow: 0 0 50px rgba(0,0,0,1);
+            align-items: stretch;
+        }
+
+        .team-column { display: flex; flex-direction: column; width: 380px; }
+
+        /* Dropdown stílusok */
+        .custom-select-container { position: relative; margin-bottom: 12px; }
+        .selected-option {
+            background: #1a1a2e; border: 1px solid rgba(255,255,255,0.3);
+            padding: 10px; cursor: pointer; font-weight: 900; text-transform: uppercase;
+            text-align: center; font-size: 1.2rem;
+        }
+        .options-list {
+            position: absolute; top: 100%; left: 0; right: 0;
+            background: #22223b; border: 2px solid #555;
+            display: none; max-height: 250px; overflow-y: auto; z-index: 100;
+        }
+        .options-list div { padding: 10px; cursor: pointer; border-bottom: 1px solid #333; background: #1a1a2e; }
+        .options-list div:hover { background: #333355; }
+
+        /* Játékos sorok elrendezése */
+        .player-row { 
+            display: flex; align-items: center; background: rgba(255,255,255,0.03); 
+            padding: 5px 10px; margin-bottom: 4px; gap: 5px;
+            height: 55px;
+        }
+        
+        .score-input { 
+            background: transparent; border: none; 
+            color: white; width: 80px; font-size: 1.8rem; font-weight: 900; 
+            text-align: center; outline: none;
+        }
+
+        /* Középső eredmény kijelző oszlopok */
+        .score-container { width: 80px; display: flex; justify-content: center; }
+
+        .team-total-display {
+            font-size: 3.5rem; font-weight: 900; text-align: center;
+        }
+        .h-total-style { color: var(--cyan); }
+        .v-total-style { color: var(--orange); }
+
+        /* Középső különbség rész */
+        .center-separator {
+            display: flex; flex-direction: column; justify-content: center;
+            align-items: center; min-width: 100px;
+        }
+
+        #reset-btn { 
+            margin-top: 40px; background: none; color: #555; 
+            border: 1px solid #333; padding: 5px 10px; cursor: pointer; 
+            font-size: 0.6rem; text-transform: uppercase;
+        }
     </style>
 </head>
-<body onload="init()">
+<body>
 
 <div class="main-hud-panel">
+    <div class="team-column">
+        <div class="custom-select-container">
+            <div id="h-team-display" class="selected-option" style="border-color: var(--cyan);" onclick="toggleMenu('h-team-options')">HAZAI CSAPAT</div>
+            <div id="h-team-options" class="options-list"></div>
+        </div>
+        <div id="h-players-list"></div>
+        
+        <div style="display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 15px; padding-top: 10px; border-top: 3px solid var(--cyan);">
+            <div id="h-total" class="team-total-display h-total-style">0</div>
+            <input type="number" id="h-extra-1" class="score-input" value="0" oninput="updateAll()" style="width: 60px; color: var(--cyan);">
+        </div>
     </div>
 
-<script>
-    // 1. A SAJÁT FIREBASE CONFIGOD IDE:
-    const firebaseConfig = {
-        apiKey: "IDE_MÁSOLD_AZ_API_KULCSOT",
-        authDomain: "PROJEKTID.firebaseapp.com",
-        databaseURL: "https://PROJEKTID.firebaseio.com",
-        projectId: "PROJEKTID",
-        storageBucket: "PROJEKTID.appspot.com",
-        messagingSenderId: "...",
-        appId: "..."
-    };
-    firebase.initializeApp(firebaseConfig);
-    const database = firebase.database();
+    <div class="center-separator">
+        <div style="height: 300px; display: flex; align-items: center; justify-content: center;">
+             <div id="diff-val" style="font-size: 2.8rem; font-weight: bold; text-shadow: 0 0 10px rgba(0,0,0,0.5);">0</div>
+        </div>
+    </div>
 
-    // 2. A CSAPAT ADATBÁZIS (db) IDE:
-    const db = {
-        "Justicia": ["Horváth Attila", "Dugár Péter", ...],
-        // ... (másold be az összes csapatot a tkstat100-ból)
-    };
-
-    // 3. MÓDOSÍTOTT MENTÉS (localStorage helyett Firebase)
-    function save() {
-        const data = {};
-        // Összeszedjük az összes beírt adatot
-        document.querySelectorAll('input').forEach(i => data[i.id] = i.value);
-        document.querySelectorAll('.selected-option').forEach(i => data[i.id] = i.innerText);
+    <div class="team-column">
+        <div class="custom-select-container">
+            <div id="v-team-display" class="selected-option" style="border-color: var(--orange);" onclick="toggleMenu('v-team-options')">VENDÉG CSAPAT</div>
+            <div id="v-team-options" class="options-list"></div>
+        </div>
+        <div id="v-players-list"></div>
         
-        // Elküldjük a felhőbe
-        database.ref('meccs/allas').set(data);
+        <div style="display: flex; align-items: center; justify-content: flex-start; gap: 10px; margin-top: 15px; padding-top: 10px; border-top: 3px solid var(--orange);">
+            <input type="number" id="v-extra-1" class="score-input" value="0" oninput="updateAll()" style="width: 60px; color: var(--orange);">
+            <div id="v-total" class="team-total-display v-total-style">0</div>
+        </div>
+    </div>
+</div>
+
+<div style="text-align: center; margin-top: 10px;">
+    <button id="reset-btn" onclick="resetAll()" style="background: rgba(255,0,0,0.2); color: #ff4e4e; border: 1px solid #ff4e4e; padding: 6px 12px; cursor: pointer; font-size: 0.7rem; font-weight: bold; text-transform: uppercase;">TÖRLÉS</button>
+</div>
+
+<script>
+    const db = {
+        "Justicia": ["Horváth Attila", "Dugár Péter", "Hegyi Gábor", "Deák Lajos", "Albert László", "Balikó Tibor", "Haramia Csaba", "Hollósi Gábor"],
+        "Gravitáció": ["Kovács János", "Pukler Zoltán", "Farkas Márton", "Pegán Péter", "Stairics Tamás", "Vincze József", "Magdics Péter", "Czibók Gyula"],
+        "AHSE Aqua Nívó": ["Krancz Rajmund", "Szabó Botond", "Nagy Balázs", "Hittaller Roland", "Szuklics Gorán", "Németh Lajos", "Mayer Bence", "Szabó István", "Boros István"],
+        "Torony-Csercsics": ["Simon Szabolcs", "Kondor Attila", "Virágh János", "Gáspár Miklós", "Biroczky Zoltán", "Fördős István", "Molnár Gyula", "Horváth Gyula", "Csercsics Antal", "Horváth Éva"],
+        "Ekszij.hu": ["Kiricsi Krisztián", "Simon Károly", "Iszak Péter", "Kámi Márk", "Kiss Zsolt", "Ádám László", "Kiss Bence", "Kunovits József", "Czeglédy Dezső", "Bíró Ferenc", "Nyúl Tünde"],
+        "Relaxállás": ["Pungor Géza", "Kozma Márta", "Hafenscher Balázs", "Kocsis Zoltán", "Káply László", "Völgyi Miklós", "Pomper Károly", "Dr. Baán Mihály", "Magdics Imre", "Szandi Péter"],
+        "Vép SE": ["Varga Gergő", "Tóth Péter", "Horváth Dia", "Kopácsi Máté", "Szabó Antal", "Szijártó Róbert", "Pogácsás József", "Zsankó Vilmos"],
+        "EKJV TC": ["Egervölgyi Péter", "Treiber Ferenc", "Németh Zoltán", "Egervölgyi Tamás", "Nagy László", "Varga István", "Legler Ferenc", "Rétfalvi András", "Farkas Ferenc"],
+        "CONOIL": ["Tóth Levente", "Szemes Ferenc", "Bukits Viktor", "Kiss Róbert", "Rudolf Péter", "Takács Gyula", "Rudolf Ajsa"],
+        "Jáki Agrár": ["Domján Tímea", "Hollósi Norbert", "Bíró András", "Bárdosi Gergő", "Pungor György", "Pungor István", "Zelles Imre", "Szíj Péter"],
+        "Royal Vasi Mesterekháza": ["Biczó Miklós", "Gombos Zsolt", "Györkös Péter", "Tóth Csaba", "Németh Herbert", "Györe János", "Szele Tamás", "Cser László", "Bencsik Lajos"],
+        "Csercsics Faipar": ["Kercselics Tamás", "Jáger István", "Csercsics Balázs", "Pintér Árpád", "Krancz Bálint", "Bujtás Péter", "Kovács Martin", "Raffai Menyhért", "Bodovics György"],
+        "AHSE Amazon": ["Bíró Annamária", "Boda Lili", "Pesti Boglárka", "Polgár Gyöngyi", "Jezsoviczki Anna", "Monostori Anita", "Hekli Mária", "Geröly Mónika", "Imre Viktória", "Peresznyák Éva", "Frigy Bianka", "Vizi Eszter"],
+        "Redondó": ["Rózsa Szabolcs", "Molnár Róbert", "Szandi Péter", "Berta Bálint", "Németh József", "Koltai András", "Fatel Péter", "Kovács Imre", "Farkas Tibor"],
+        "Twister": ["Németh Zsuzsa", "Horváth András", "Pék Ciprián", "Benke Zoltán", "Márfi Imre", "Joó Gábor", "Török Nikoletta", "Horváthné Piroska"]
+    };
+
+    const STORAGE_KEY = 'tekestat_v13_6';
+
+    function init() {
+        const hList = document.getElementById('h-players-list');
+        const vList = document.getElementById('v-players-list');
+        hList.innerHTML = ''; vList.innerHTML = '';
+        
+        for(let i=1; i<=6; i++) {
+            // Hazai sor: Név - Pontszám
+            hList.innerHTML += `<div class="player-row">
+                <div class="custom-select-container" style="flex-grow:1; display:flex; align-items:center;">
+                    <div class="dropdown-arrow" onclick="togglePlayerMenu('h', ${i}, event)" style="cursor:pointer; color:#888; margin-right:5px;">▼</div>
+                    <input type="text" id="h-p-input-${i}" class="player-name-input" value="NÉV" readonly onclick="enablePlayerInput('h', ${i})" onblur="savePlayerInput('h', ${i})" style="font-size:1.4rem; font-weight: 900; border: none; background: transparent; color: white; width:100%;">
+                    <div id="h-p-opt-${i}" class="options-list"></div>
+                </div>
+                <input type="number" id="h-s-${i}" class="score-input h-val" value="0" onfocus="if(this.value=='0')this.value=''" oninput="updateAll()" style="color: var(--cyan);">
+            </div>`;
+
+            // Vendég sor: Pontszám - Név (hogy a pontszámok középre essenek)
+            vList.innerHTML += `<div class="player-row">
+                <input type="number" id="v-s-${i}" class="score-input v-val" value="0" onfocus="if(this.value=='0')this.value=''" oninput="updateAll()" style="color: var(--orange);">
+                <div class="custom-select-container" style="flex-grow:1; display:flex; align-items:center;">
+                    <input type="text" id="v-p-input-${i}" class="player-name-input" value="NÉV" readonly onclick="enablePlayerInput('v', ${i})" onblur="savePlayerInput('v', ${i})" style="font-size:1.4rem; font-weight: 900; border: none; background: transparent; color: white; width:100%; text-align:right;">
+                    <div class="dropdown-arrow" onclick="togglePlayerMenu('v', ${i}, event)" style="cursor:pointer; color:#888; margin-left:5px;">▼</div>
+                    <div id="v-p-opt-${i}" class="options-list"></div>
+                </div>
+            </div>`;
+        }
+        setupTeamMenus();
+        load();
     }
 
-    // 4. MÓDOSÍTOTT BETÖLTÉS (Firebase-ből induláskor)
-    function load() {
-        database.ref('meccs/allas').once('value', (snap) => {
-            const data = snap.val();
-            if(data) {
-                Object.keys(data).forEach(id => {
-                    const el = document.getElementById(id);
-                    if(el) {
-                        if(el.tagName === 'INPUT') el.value = data[id];
-                        else el.innerText = data[id];
-                    }
-                });
-                updateAll();
-            }
+    function toggleMenu(id) {
+        const el = document.getElementById(id);
+        const isVisible = el.style.display === 'block';
+        document.querySelectorAll('.options-list').forEach(l => l.style.display = 'none');
+        if(!isVisible) el.style.display = 'block';
+    }
+
+    window.onclick = function(e) { 
+        if (!e.target.classList.contains('selected-option') && !e.target.classList.contains('dropdown-arrow')) {
+            document.querySelectorAll('.options-list').forEach(l => l.style.display = 'none');
+        }
+    }
+
+    function setupTeamMenus() {
+        const hOpt = document.getElementById('h-team-options');
+        const vOpt = document.getElementById('v-team-options');
+        const sortedTeams = Object.keys(db).sort();
+        sortedTeams.forEach(team => {
+            const d1 = document.createElement('div'); d1.innerText = team; d1.onclick = () => selectTeam('h', team); hOpt.appendChild(d1);
+            const d2 = document.createElement('div'); d2.innerText = team; d2.onclick = () => selectTeam('v', team); vOpt.appendChild(d2);
         });
     }
 
-    // ... Ide másold be a tkstat100.html többi függvényét (init, updateAll, etc.)
-    // De az updateAll() végén mindig hívd meg a save() függvényt!
+    function selectTeam(side, team) {
+        document.getElementById(`${side}-team-display`).innerText = team;
+        const players = db[team].slice().sort();
+        for(let i=1; i<=6; i++) {
+            const optCont = document.getElementById(`${side}-p-opt-${i}`);
+            optCont.innerHTML = `<div onclick="setP('${side}',${i},'NÉV')">NÉV</div>`;
+            players.forEach(p => {
+                const d = document.createElement('div'); d.innerText = p;
+                d.onclick = () => setP(side, i, p);
+                optCont.appendChild(d);
+            });
+        }
+        updateAll();
+    }
+
+    function setP(side, i, name) { 
+        document.getElementById(`${side}-p-input-${i}`).value = name;
+        updateAll(); 
+    }
+
+    function enablePlayerInput(side, i) {
+        const input = document.getElementById(`${side}-p-input-${i}`);
+        input.removeAttribute('readonly');
+        input.style.background = '#1a1a2e';
+        input.select();
+    }
+
+    function savePlayerInput(side, i) {
+        const input = document.getElementById(`${side}-p-input-${i}`);
+        input.setAttribute('readonly', true);
+        input.style.background = 'transparent';
+        if(input.value.trim() === '') input.value = 'NÉV';
+        updateAll();
+    }
+
+    function togglePlayerMenu(side, i, event) {
+        event.stopPropagation();
+        toggleMenu(`${side}-p-opt-${i}`);
+    }
+
+    function updateAll() {
+        let h=0, v=0;
+        document.querySelectorAll('.h-val').forEach(i => h += parseInt(i.value)||0);
+        document.querySelectorAll('.v-val').forEach(i => v += parseInt(i.value)||0);
+        
+        document.getElementById('h-total').innerText = h;
+        document.getElementById('v-total').innerText = v;
+        
+        const diff = Math.abs(h - v);
+        const dEl = document.getElementById('diff-val');
+        dEl.innerText = "+" + diff;
+        
+        if(h > v) dEl.style.color = "var(--cyan)";
+        else if(v > h) dEl.style.color = "var(--orange)";
+        else dEl.style.color = "white";
+        
+        save();
+    }
+
+    function save() {
+        const data = {};
+        document.querySelectorAll('input').forEach(i => data[i.id] = i.value);
+        document.querySelectorAll('.selected-option').forEach(i => data[i.id] = i.innerText);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    }
+
+    function load() {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if(saved) {
+            const data = JSON.parse(saved);
+            if(data['h-team-display']) document.getElementById('h-team-display').innerText = data['h-team-display'];
+            if(data['v-team-display']) document.getElementById('v-team-display').innerText = data['v-team-display'];
+            Object.keys(data).forEach(id => {
+                const el = document.getElementById(id);
+                if(el) { 
+                    if(el.tagName === 'INPUT') el.value = data[id]; 
+                    else el.innerText = data[id]; 
+                }
+            });
+        }
+        updateAll();
+    }
+
+    function resetAll() { localStorage.removeItem(STORAGE_KEY); location.reload(); }
+
+    init();
 </script>
 </body>
 </html>
