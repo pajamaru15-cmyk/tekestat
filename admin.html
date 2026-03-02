@@ -2,113 +2,73 @@
 <html lang="hu">
 <head>
     <meta charset="UTF-8">
-    <title>Tekestat ADMIN - Élő Kezelőfelület</title>
-    
+    <title>Tekestat ADMIN - Élő Kezelő</title>
     <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
 
     <style>
-        /* Itt maradhat a tkstat100.html összes eredeti CSS stílusa */
+        /* Ide másold be a tkstat100.html teljes <style> részét, 
+           hogy ugyanúgy nézzen ki, mint az eredeti! */
         :root { --cyan: #00d4ff; --orange: #ff8c00; --panel-bg: rgba(10, 12, 18, 0.95); }
-        body { background: #1a1a1a; margin: 0; padding: 20px; font-family: 'Segoe UI', sans-serif; color: white; }
-        .main-hud-panel { background: var(--panel-bg); padding: 25px; display: flex; gap: 20px; border-radius: 4px; }
-        input { background: rgba(255,255,255,0.1); border: 1px solid #444; color: white; padding: 5px; width: 60px; text-align: center; }
-        .team-name { width: 100%; font-size: 20px; margin-bottom: 10px; }
-        button { cursor: pointer; padding: 10px; background: #333; color: white; border: 1px solid #555; }
-        .status-bar { position: fixed; bottom: 0; left: 0; width: 100%; background: #00d4ff; color: black; text-align: center; padding: 5px; font-weight: bold; }
+        body { background: #1a1a1a; font-family: 'Segoe UI', sans-serif; color: white; padding: 20px; }
+        /* ... (többi stílus) ... */
     </style>
 </head>
-<body>
+<body onload="init()">
 
 <div class="main-hud-panel">
-    <div class="team-column">
-        <input type="text" id="h-name" class="team-name" value="HAZAI CSAPAT" oninput="updateAll()">
-        <div id="h-players">
-            <input type="number" id="h1-p" placeholder="P" oninput="updateAll()">
-            <input type="number" id="h1-f" placeholder="F" oninput="updateAll()">
-        </div>
-        <div style="font-size: 30px; margin-top: 20px;">Összesen: <span id="h-total">0</span></div>
     </div>
-
-    <div style="text-align: center; align-self: center;">
-        <div id="diff-val" style="font-size: 40px;">0</div>
-        <button onclick="clearCloud()" style="background: red; margin-top: 20px;">TÖRLÉS</button>
-    </div>
-
-    <div class="team-column">
-        <input type="text" id="v-name" class="team-name" value="VENDÉG CSAPAT" oninput="updateAll()">
-        <div id="v-players">
-            <input type="number" id="v1-p" placeholder="P" oninput="updateAll()">
-            <input type="number" id="v1-f" placeholder="F" oninput="updateAll()">
-        </div>
-        <div style="font-size: 30px; margin-top: 20px;">Összesen: <span id="v-total">0</span></div>
-    </div>
-</div>
-
-<div class="status-bar" id="status">Készen áll az élő adásra</div>
 
 <script>
-    // 1. KONFIGURÁCIÓ (Ide másold a sajátodat a Firebase-ből!)
+    // 1. A SAJÁT FIREBASE CONFIGOD IDE:
     const firebaseConfig = {
-        apiKey: "SAJÁT_API_KULCS",
-        authDomain: "SAJÁT_PROJEKT.firebaseapp.com",
-        databaseURL: "https://SAJÁT_PROJEKT.firebaseio.com",
-        projectId: "SAJÁT_PROJEKT",
-        storageBucket: "SAJÁT_PROJEKT.appspot.com",
+        apiKey: "IDE_MÁSOLD_AZ_API_KULCSOT",
+        authDomain: "PROJEKTID.firebaseapp.com",
+        databaseURL: "https://PROJEKTID.firebaseio.com",
+        projectId: "PROJEKTID",
+        storageBucket: "PROJEKTID.appspot.com",
         messagingSenderId: "...",
         appId: "..."
     };
-    
     firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
+    const database = firebase.database();
 
-    // 2. SZÁMOLÁS ÉS MENTÉS A FELHŐBE
-    function updateAll() {
-        let h = 0; let v = 0;
+    // 2. A CSAPAT ADATBÁZIS (db) IDE:
+    const db = {
+        "Justicia": ["Horváth Attila", "Dugár Péter", ...],
+        // ... (másold be az összes csapatot a tkstat100-ból)
+    };
+
+    // 3. MÓDOSÍTOTT MENTÉS (localStorage helyett Firebase)
+    function save() {
+        const data = {};
+        // Összeszedjük az összes beírt adatot
+        document.querySelectorAll('input').forEach(i => data[i.id] = i.value);
+        document.querySelectorAll('.selected-option').forEach(i => data[i.id] = i.innerText);
         
-        // Összeadjuk a pontokat (példa 1-1 sorra, ezt bővítsd a többi mezővel)
-        h += parseInt(document.getElementById('h1-p').value) || 0;
-        v += parseInt(document.getElementById('v1-p').value) || 0;
-
-        document.getElementById('h-total').innerText = h;
-        document.getElementById('v-total').innerText = v;
-        document.getElementById('diff-val').innerText = Math.abs(h - v);
-
-        saveToCloud();
+        // Elküldjük a felhőbe
+        database.ref('meccs/allas').set(data);
     }
 
-    function saveToCloud() {
-        const data = {};
-        // Minden input tartalmát elmentjük
-        document.querySelectorAll('input').forEach(i => data[i.id] = i.value);
-        
-        document.getElementById('status').innerText = "Menti...";
-        
-        db.ref('meccs/allas').set(data).then(() => {
-            document.getElementById('status').innerText = "ÉLŐ - Adatok beküldve!";
-            document.getElementById('status').style.background = "#00ff00";
+    // 4. MÓDOSÍTOTT BETÖLTÉS (Firebase-ből induláskor)
+    function load() {
+        database.ref('meccs/allas').once('value', (snap) => {
+            const data = snap.val();
+            if(data) {
+                Object.keys(data).forEach(id => {
+                    const el = document.getElementById(id);
+                    if(el) {
+                        if(el.tagName === 'INPUT') el.value = data[id];
+                        else el.innerText = data[id];
+                    }
+                });
+                updateAll();
+            }
         });
     }
 
-    function clearCloud() {
-        if(confirm("Biztosan törlöd a teljes állást?")) {
-            document.querySelectorAll('input').forEach(i => i.value = "");
-            updateAll();
-        }
-    }
-
-    // Indításkor adatok betöltése a felhőből
-    db.ref('meccs/allas').once('value', (snap) => {
-        const d = snap.val();
-        if(d) {
-            Object.keys(d).forEach(id => {
-                const el = document.getElementById(id);
-                if(el) el.value = d[id];
-            });
-            updateAll();
-        }
-    });
+    // ... Ide másold be a tkstat100.html többi függvényét (init, updateAll, etc.)
+    // De az updateAll() végén mindig hívd meg a save() függvényt!
 </script>
-
 </body>
 </html>
