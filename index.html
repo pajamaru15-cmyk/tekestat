@@ -1,53 +1,124 @@
 <!DOCTYPE html>
-<html>
+<html lang="hu">
 <head>
-    <title>Élő Eredményjelző - OBS</title>
-    <style>
-        /* Itt kedvedre szépítheted az eredményjelzőt */
-        body { background-color: transparent; color: white; font-family: Arial; text-align: center; }
-        .score-box { display: flex; justify-content: center; font-size: 80px; font-weight: bold; }
-        .team { margin: 0 40px; }
-        .label { font-size: 20px; color: #aaa; }
-    </style>
-
+    <meta charset="UTF-8">
+    <title>Tekestat LIVE HUD - OBS Kijelző</title>
+    
     <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
+
+    <style>
+        /* A tkstat100.html eredeti stílusai, de gombok nélkül */
+        :root {
+            --cyan: #00d4ff; --orange: #ff8c00; --panel-bg: rgba(10, 12, 18, 0.95);
+        }
+        body {
+            background: transparent !important; /* OBS-hez átlátszó háttér */
+            margin: 0; padding: 20px;
+            display: flex; justify-content: center; align-items: center;
+            font-family: 'Segoe UI', sans-serif; color: white;
+            overflow: hidden;
+        }
+
+        .main-hud-panel {
+            background: var(--panel-bg); padding: 25px; 
+            display: flex; gap: 20px; border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 4px; box-shadow: 0 0 50px rgba(0,0,0,1);
+        }
+
+        .team-column { display: flex; flex-direction: column; width: 380px; }
+        
+        /* Csak olvasható mezők stílusa */
+        input {
+            background: transparent; border: none; color: white;
+            font-size: 18px; pointer-events: none; /* Nem lehet beléjük kattintani */
+            text-align: center;
+        }
+
+        .team-name { font-size: 24px; font-weight: bold; margin-bottom: 15px; text-transform: uppercase; }
+        .total-score { font-size: 48px; font-weight: bold; margin-top: 10px; }
+        
+        #h-total { color: var(--cyan); }
+        #v-total { color: var(--orange); }
+        
+        .diff-container {
+            display: flex; flex-direction: column; justify-content: center;
+            align-items: center; min-width: 100px;
+        }
+        #diff-val { font-size: 40px; font-weight: bold; }
+    </style>
 </head>
 <body>
 
-    <div class="score-box">
-        <div class="team">
-            <div class="label">HAZAI</div>
-            <div id="hazai-display">0</div>
+<div class="main-hud-panel">
+    <div class="team-column">
+        <input type="text" id="h-name" class="team-name" value="HAZAI">
+        <div id="h-players">
+            <div>Játékos 1: <input type="number" id="h1-p" value="0"></div>
         </div>
-        <div class="team">
-            <div class="label">VENDÉG</div>
-            <div id="vendeg-display">0</div>
-        </div>
+        <div class="total-score">PONT: <span id="h-total">0</span></div>
     </div>
 
-    <script>
-        // IDE MÁSOLD BE UGYANAZT A CONFIGOT, AMIT AZ ADMINBA!
-        const firebaseConfig = {
-            apiKey: "...",
-            authDomain: "...",
-            databaseURL: "...",
-            projectId: "...",
-            storageBucket: "...",
-            messagingSenderId: "...",
-            appId: "..."
-        };
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.database();
+    <div class="diff-container">
+        <div style="font-size: 14px; color: #888;">KÜLÖNBSÉG</div>
+        <div id="diff-val">0</div>
+    </div>
 
-        // FIGYELÉS: Amint változik az adat a Firebase-ben, ez lefut
-        db.ref('meccs/allas').on('value', (snapshot) => {
-            const data = snapshot.val();
-            if (data) {
-                document.getElementById('hazai-display').innerText = data.hazai;
-                document.getElementById('vendeg-display').innerText = data.vendeg;
-            }
-        });
-    </script>
+    <div class="team-column">
+        <input type="text" id="v-name" class="team-name" value="VENDÉG">
+        <div id="v-players">
+            <div>Játékos 1: <input type="number" id="v1-p" value="0"></div>
+        </div>
+        <div class="total-score">PONT: <span id="v-total">0</span></div>
+    </div>
+</div>
+
+<script>
+    // 1. KONFIGURÁCIÓ (Másold ide ugyanazt, amit az admin.html-be tettél!)
+    const firebaseConfig = {
+        apiKey: "SAJÁT_API_KULCS",
+        authDomain: "SAJÁT_PROJEKT.firebaseapp.com",
+        databaseURL: "https://SAJÁT_PROJEKT.firebaseio.com",
+        projectId: "SAJÁT_PROJEKT",
+        storageBucket: "SAJÁT_PROJEKT.appspot.com",
+        messagingSenderId: "...",
+        appId: "..."
+    };
+    
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    // 2. ÉLŐ FIGYELÉS (Ez a lényeg!)
+    // Amint változik valami a Firebase-ben, ez a függvény azonnal lefut
+    db.ref('meccs/allas').on('value', (snapshot) => {
+        const data = snapshot.val();
+        if(data) {
+            // Végigmegyünk az összes kapott adaton
+            Object.keys(data).forEach(id => {
+                const el = document.getElementById(id);
+                if(el) {
+                    el.value = data[id]; // Ha input mező
+                    if(el.tagName !== 'INPUT') el.innerText = data[id]; // Ha span vagy div
+                }
+            });
+            
+            // Újraszámoljuk a kijelzőn az összesítőt
+            calculateTotals();
+        }
+    });
+
+    function calculateTotals() {
+        // Ide írd meg ugyanazt a logikát, ami összeadja a pontokat, mint az adminban
+        let hTotal = parseInt(document.getElementById('h1-p').value) || 0;
+        let vTotal = parseInt(document.getElementById('v1-p').value) || 0;
+        
+        document.getElementById('h-total').innerText = hTotal;
+        document.getElementById('v-total').innerText = vTotal;
+        document.getElementById('diff-val').innerText = Math.abs(hTotal - vTotal);
+    }
+</script>
+
+</body>
+</html>
 </body>
 </html>
