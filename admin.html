@@ -2,14 +2,18 @@
 <html lang="hu">
 <head>
     <meta charset="UTF-8">
-    <title>Tekestat HUD v13.6 - Fixed Layout</title>
+    <title>Tekestat ADMIN v13.6 - Élő Vezérlő</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
+
     <style>
         :root {
             --cyan: #00d4ff; --orange: #ff8c00; --panel-bg: rgba(10, 12, 18, 0.95);
         }
         body {
-            background: transparent !important; margin: 0; padding: 0;
-            display: flex; justify-content: center; align-items: center;
+            background: #1a1a1a !important; margin: 0; padding: 0;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
             min-height: 100vh; font-family: 'Segoe UI', sans-serif; color: white;
         }
 
@@ -25,7 +29,6 @@
 
         .team-column { display: flex; flex-direction: column; width: 380px; }
 
-        /* Dropdown stílusok */
         .custom-select-container { position: relative; margin-bottom: 12px; }
         .selected-option {
             background: #1a1a2e; border: 1px solid rgba(255,255,255,0.3);
@@ -40,7 +43,6 @@
         .options-list div { padding: 10px; cursor: pointer; border-bottom: 1px solid #333; background: #1a1a2e; }
         .options-list div:hover { background: #333355; }
 
-        /* Játékos sorok elrendezése */
         .player-row { 
             display: flex; align-items: center; background: rgba(255,255,255,0.03); 
             padding: 5px 10px; margin-bottom: 4px; gap: 5px;
@@ -53,16 +55,12 @@
             text-align: center; outline: none;
         }
 
-        /* Középső eredmény kijelző oszlopok */
-        .score-container { width: 80px; display: flex; justify-content: center; }
-
         .team-total-display {
             font-size: 3.5rem; font-weight: 900; text-align: center;
         }
         .h-total-style { color: var(--cyan); }
         .v-total-style { color: var(--orange); }
 
-        /* Középső különbség rész */
         .center-separator {
             display: flex; flex-direction: column; justify-content: center;
             align-items: center; min-width: 100px;
@@ -73,9 +71,12 @@
             border: 1px solid #333; padding: 5px 10px; cursor: pointer; 
             font-size: 0.6rem; text-transform: uppercase;
         }
+        .status-bar { position: fixed; top: 0; width: 100%; text-align: center; padding: 5px; font-size: 0.8rem; font-weight: bold; }
     </style>
 </head>
 <body>
+
+<div id="status" class="status-bar" style="background: #ff8c00; color: black;">FIREBASE CSATLAKOZÁS...</div>
 
 <div class="main-hud-panel">
     <div class="team-column">
@@ -112,10 +113,24 @@
 </div>
 
 <div style="text-align: center; margin-top: 10px;">
-    <button id="reset-btn" onclick="resetAll()" style="background: rgba(255,0,0,0.2); color: #ff4e4e; border: 1px solid #ff4e4e; padding: 6px 12px; cursor: pointer; font-size: 0.7rem; font-weight: bold; text-transform: uppercase;">TÖRLÉS</button>
+    <button id="reset-btn" onclick="resetAll()">TÖRLÉS</button>
 </div>
 
 <script>
+    // --- FIREBASE BEÁLLÍTÁSOK ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyBgabHTznN-Ku9yuQRALVe9gFEWS1L9nJA",
+      authDomain: "tekestat-da02c.firebaseapp.com",
+      databaseURL: "https://tekestat-da02c-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "tekestat-da02c",
+      storageBucket: "tekestat-da02c.firebasestorage.app",
+      messagingSenderId: "989650998379",
+      appId: "1:989650998379:web:aeefd8cc03c8fa6ca88d2e"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+
     const db = {
         "Justicia": ["Horváth Attila", "Dugár Péter", "Hegyi Gábor", "Deák Lajos", "Albert László", "Balikó Tibor", "Haramia Csaba", "Hollósi Gábor"],
         "Gravitáció": ["Kovács János", "Pukler Zoltán", "Farkas Márton", "Pegán Péter", "Stairics Tamás", "Vincze József", "Magdics Péter", "Czibók Gyula"],
@@ -134,15 +149,12 @@
         "Twister": ["Németh Zsuzsa", "Horváth András", "Pék Ciprián", "Benke Zoltán", "Márfi Imre", "Joó Gábor", "Török Nikoletta", "Horváthné Piroska"]
     };
 
-    const STORAGE_KEY = 'tekestat_v13_6';
-
     function init() {
         const hList = document.getElementById('h-players-list');
         const vList = document.getElementById('v-players-list');
         hList.innerHTML = ''; vList.innerHTML = '';
         
         for(let i=1; i<=6; i++) {
-            // Hazai sor: Név - Pontszám
             hList.innerHTML += `<div class="player-row">
                 <div class="custom-select-container" style="flex-grow:1; display:flex; align-items:center;">
                     <div class="dropdown-arrow" onclick="togglePlayerMenu('h', ${i}, event)" style="cursor:pointer; color:#888; margin-right:5px;">▼</div>
@@ -152,7 +164,6 @@
                 <input type="number" id="h-s-${i}" class="score-input h-val" value="0" onfocus="if(this.value=='0')this.value=''" oninput="updateAll()" style="color: var(--cyan);">
             </div>`;
 
-            // Vendég sor: Pontszám - Név (hogy a pontszámok középre essenek)
             vList.innerHTML += `<div class="player-row">
                 <input type="number" id="v-s-${i}" class="score-input v-val" value="0" onfocus="if(this.value=='0')this.value=''" oninput="updateAll()" style="color: var(--orange);">
                 <div class="custom-select-container" style="flex-grow:1; display:flex; align-items:center;">
@@ -171,12 +182,6 @@
         const isVisible = el.style.display === 'block';
         document.querySelectorAll('.options-list').forEach(l => l.style.display = 'none');
         if(!isVisible) el.style.display = 'block';
-    }
-
-    window.onclick = function(e) { 
-        if (!e.target.classList.contains('selected-option') && !e.target.classList.contains('dropdown-arrow')) {
-            document.querySelectorAll('.options-list').forEach(l => l.style.display = 'none');
-        }
     }
 
     function setupTeamMenus() {
@@ -248,31 +253,42 @@
         save();
     }
 
+    // --- FIREBASE MENTÉS ---
     function save() {
         const data = {};
         document.querySelectorAll('input').forEach(i => data[i.id] = i.value);
         document.querySelectorAll('.selected-option').forEach(i => data[i.id] = i.innerText);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        
+        database.ref('live_match').set(data).then(() => {
+            document.getElementById('status').innerText = "SZINKRONIZÁLVA ✅";
+            document.getElementById('status').style.background = "#00d4ff";
+        });
     }
 
+    // --- FIREBASE BETÖLTÉS ---
     function load() {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if(saved) {
-            const data = JSON.parse(saved);
-            if(data['h-team-display']) document.getElementById('h-team-display').innerText = data['h-team-display'];
-            if(data['v-team-display']) document.getElementById('v-team-display').innerText = data['v-team-display'];
-            Object.keys(data).forEach(id => {
-                const el = document.getElementById(id);
-                if(el) { 
-                    if(el.tagName === 'INPUT') el.value = data[id]; 
-                    else el.innerText = data[id]; 
-                }
-            });
-        }
-        updateAll();
+        database.ref('live_match').once('value', (snapshot) => {
+            const data = snapshot.val();
+            if(data) {
+                if(data['h-team-display']) document.getElementById('h-team-display').innerText = data['h-team-display'];
+                if(data['v-team-display']) document.getElementById('v-team-display').innerText = data['v-team-display'];
+                Object.keys(data).forEach(id => {
+                    const el = document.getElementById(id);
+                    if(el) { 
+                        if(el.tagName === 'INPUT') el.value = data[id]; 
+                        else el.innerText = data[id]; 
+                    }
+                });
+                updateAll();
+            }
+        });
     }
 
-    function resetAll() { localStorage.removeItem(STORAGE_KEY); location.reload(); }
+    function resetAll() { 
+        if(confirm("Biztosan törölsz mindent?")) {
+            database.ref('live_match').remove().then(() => location.reload());
+        }
+    }
 
     init();
 </script>
